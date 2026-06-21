@@ -1,0 +1,494 @@
+ <!DOCTYPE html>
+ <html lang="zh-CN">
+ <head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>咕嘎 & doro 雪地舞曲 ❄️</title>
+ <style>
+   * { margin: 0; padding: 0; box-sizing: border-box; }
+   body {
+     background: #0a1628;
+     display: flex; justify-content: center; align-items: center;
+     min-height: 100vh; font-family: 'Segoe UI', sans-serif;
+   }
+   .container {
+     position: relative;
+     border-radius: 20px;
+     overflow: hidden;
+     box-shadow: 0 0 60px rgba(100,180,255,0.3);
+   }
+   canvas {
+     display: block;
+     width: 800px; height: 500px;
+   }
+   .controls {
+     position: absolute; bottom: 16px; left: 50%;
+     transform: translateX(-50%);
+     display: flex; gap: 12px;
+   }
+   .controls button {
+     padding: 8px 22px; border: none; border-radius: 25px;
+     background: rgba(255,255,255,0.15);
+     backdrop-filter: blur(8px);
+     color: #fff; font-size: 14px; cursor: pointer;
+     transition: all 0.2s; letter-spacing: 1px;
+   }
+   .controls button:hover {
+     background: rgba(255,255,255,0.30);
+     transform: scale(1.05);
+   }
+   .title {
+     position: absolute; top: 20px; left: 0; right: 0;
+     text-align: center;
+     color: rgba(255,255,255,0.7);
+     font-size: 18px; letter-spacing: 4px;
+     text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+     pointer-events: none;
+   }
+ </style>
+ </head>
+ <body>
+ <div class="container">
+   <canvas id="c" width="800" height="500"></canvas>
+   <div class="title">✨ 咕嘎 & doro · 雪地圆舞曲 ✨</div>
+   <div class="controls">
+     <button id="playBtn">▶ 播放音乐</button>
+     <button id="resetBtn">⟳ 重播</button>
+   </div>
+ </div>
+ <script>
+ const canvas = document.getElementById('c');
+ const ctx = canvas.getContext('2d');
+ const W = 800, H = 500;
+ 
+ // ========== Audio ==========
+ let audioCtx, isPlaying = false;
+ let masterGain, melodyNodes = [];
+ 
+ function initAudio() {
+   if (audioCtx) return;
+   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+   masterGain = audioCtx.createGain();
+   masterGain.gain.value = 0.30;
+   masterGain.connect(audioCtx.destination);
+ }
+ 
+ function playNote(freq, start, dur, dest, type='sine', vol=0.15) {
+   const osc = audioCtx.createOscillator();
+   const env = audioCtx.createGain();
+   osc.type = type;
+   osc.frequency.value = freq;
+   env.gain.setValueAtTime(0, start);
+   env.gain.linearRampToValueAtTime(vol, start + 0.04);
+   env.gain.setValueAtTime(vol, start + dur - 0.08);
+   env.gain.linearRampToValueAtTime(0, start + dur);
+   osc.connect(env).connect(dest);
+   osc.start(start);
+   osc.stop(start + dur);
+   melodyNodes.push(osc);
+ }
+ 
+ function playMelody() {
+   if (!audioCtx) return;
+   const t = audioCtx.currentTime;
+   const bpm = 120;
+   const beat = 60 / bpm;
+   // cheerful waltz-like melody in C major
+   const melody = [
+     // bar1
+     [523, 1], [587, 0.5], [659, 0.5], [784, 1.5], [659, 0.5],
+     // bar2
+     [698, 1], [659, 0.5], [587, 0.5], [523, 1.5], [587, 0.5],
+     // bar3
+     [659, 1], [698, 0.5], [784, 0.5], [880, 1], [784, 0.5], [698, 0.5],
+     // bar4
+     [659, 1], [587, 0.5], [523, 0.5], [587, 1], [659, 0.5], [523, 0.5],
+     // bar5
+     [784, 1], [784, 0.5], [784, 0.5], [1047, 1.5], [880, 0.5],
+     // bar6
+     [784, 1], [698, 0.5], [659, 0.5], [587, 1.5], [523, 0.5],
+     // bar7
+     [659, 1.5], [659, 0.5], [784, 1], [698, 0.5], [659, 0.5],
+     // bar8
+     [587, 1.5], [523, 0.5], [587, 1], [659, 0.5], [784, 0.25], [880, 0.25],
+   ];
+   let tt = t + 0.2;
+   // bass line
+   const bassNotes = [[262,2],[294,2],[330,2],[262,2],[349,2],[294,2],[261,2],[262,2]];
+   let bt = t + 0.2;
+   const bassGain = audioCtx.createGain();
+   bassGain.gain.value = 0.12;
+   bassGain.connect(masterGain);
+   for (const [f, d] of bassNotes) {
+     playNote(f, bt, d * beat, masterGain, 'triangle', 0.10);
+     bt += d * beat;
+   }
+   // melody
+   for (const [f, d] of melody) {
+     playNote(f, tt, d * beat * 0.9, masterGain, 'sine', 0.12);
+     // add a gentle harmony
+     const harm = f * (d < 1 ? 1.5 : 2);
+     playNote(harm, tt, d * beat * 0.7, masterGain, 'sine', 0.04);
+     tt += d * beat;
+   }
+   // bell accent every 4 beats
+   for (let i = 0; i < 8; i++) {
+     playNote(1319, t + i * 2 * beat, 0.3, masterGain, 'sine', 0.03);
+   }
+ }
+ 
+ // ========== Snow ==========
+ const snowflakes = [];
+ for (let i = 0; i < 120; i++) {
+   snowflakes.push({
+     x: Math.random() * W, y: Math.random() * H,
+     r: Math.random() * 3 + 1.5,
+     speed: Math.random() * 0.8 + 0.3,
+     drift: Math.random() * 0.4 - 0.2,
+     opacity: Math.random() * 0.6 + 0.3
+   });
+ }
+ 
+ // ========== Characters ==========
+ // 咕嘎 — cute green character
+ // doro — cute orange character
+ 
+ const dancePhase = { t: 0 };
+ 
+ function drawGround() {
+   // snow ground with gradient
+   const g = ctx.createLinearGradient(0, H-70, 0, H);
+   g.addColorStop(0, 'rgba(220,235,255,0.3)');
+   g.addColorStop(0.5, 'rgba(200,220,240,0.6)');
+   g.addColorStop(1, 'rgba(180,210,240,0.9)');
+   ctx.fillStyle = g;
+   ctx.beginPath();
+   ctx.ellipse(W/2, H-20, 380, 55, 0, 0, Math.PI * 2);
+   ctx.fill();
+   // sparkle dots on snow
+   for (let i = 0; i < 30; i++) {
+     const sx = 100 + Math.sin(i*7.3) * 280 + Math.sin(i*1.1)*40;
+     const sy = H - 18 + Math.cos(i*5.7) * 30;
+     ctx.fillStyle = `rgba(255,255,255,${0.1 + Math.sin(Date.now()/800 + i)*0.08})`;
+     ctx.beginPath();
+     ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
+     ctx.fill();
+   }
+ }
+ 
+ function drawSnowBg() {
+   // night sky gradient
+   const g = ctx.createLinearGradient(0, 0, 0, H);
+   g.addColorStop(0, '#0f1b33');
+   g.addColorStop(0.5, '#1a2d4a');
+   g.addColorStop(1, '#2a4060');
+   ctx.fillStyle = g;
+   ctx.fillRect(0, 0, W, H);
+   // moon
+   ctx.fillStyle = 'rgba(255,250,220,0.8)';
+   ctx.shadowColor = 'rgba(200,230,255,0.3)';
+   ctx.shadowBlur = 50;
+   ctx.beginPath();
+   ctx.arc(660, 60, 35, 0, Math.PI * 2);
+   ctx.fill();
+   ctx.shadowBlur = 0;
+   // stars
+   for (let i = 0; i < 50; i++) {
+     const sx = (i * 137.5) % W;
+     const sy = (i * 97.3) % (H * 0.5);
+     const twinkle = 0.3 + Math.sin(Date.now()/1200 + i * 2.7) * 0.3;
+     ctx.fillStyle = `rgba(255,255,255,${twinkle * 0.6})`;
+     ctx.beginPath();
+     ctx.arc(sx, sy, 0.8 + (i % 3) * 0.5, 0, Math.PI * 2);
+     ctx.fill();
+   }
+   // distant trees
+   ctx.fillStyle = 'rgba(30,60,80,0.25)';
+   for (let i = 0; i < 8; i++) {
+     const tx = i * 110 + 20;
+     const th = 40 + Math.sin(i)*20;
+     ctx.beginPath();
+     ctx.moveTo(tx, H-95);
+     ctx.lineTo(tx-25, H-65);
+     ctx.lineTo(tx+25, H-65);
+     ctx.closePath();
+     ctx.fill();
+     ctx.beginPath();
+     ctx.moveTo(tx-5, H-105);
+     ctx.lineTo(tx-18, H-65);
+     ctx.lineTo(tx+18, H-65);
+     ctx.closePath();
+     ctx.fill();
+   }
+ }
+ 
+ function drawCharacter(x, y, scale, colors, name, isLeft) {
+   // colors: { body, dark, accent, eye, cheek }
+   const phase = dancePhase.t;
+   const bounce = Math.sin(phase * 4) * 6 * scale;
+   const legSwing = Math.sin(phase * 4);
+   const armSwing = Math.sin(phase * 4 + Math.PI);
+   const tilt = Math.sin(phase * 4) * 3;
+   
+   ctx.save();
+   ctx.translate(x, y + bounce);
+   ctx.rotate(tilt * Math.PI / 180);
+   
+   // === shadow ===
+   ctx.fillStyle = 'rgba(0,0,0,0.15)';
+   ctx.beginPath();
+   ctx.ellipse(0, 38 * scale, 30 * scale, 6 * scale, 0, 0, Math.PI * 2);
+   ctx.fill();
+   
+   // === legs ===
+   ctx.strokeStyle = colors.dark;
+   ctx.lineWidth = 4 * scale;
+   ctx.lineCap = 'round';
+   // left leg
+   ctx.save();
+   ctx.translate(-8 * scale, 22 * scale);
+   ctx.rotate(legSwing * 0.3);
+   ctx.beginPath();
+   ctx.moveTo(0, 0);
+   ctx.lineTo(0, 14 * scale);
+   ctx.stroke();
+   // shoe
+   ctx.fillStyle = colors.dark;
+   ctx.beginPath();
+   ctx.arc(2 * scale, 14 * scale, 5 * scale, 0, Math.PI * 2);
+   ctx.fill();
+   ctx.restore();
+   // right leg
+   ctx.save();
+   ctx.translate(8 * scale, 22 * scale);
+   ctx.rotate(-legSwing * 0.3);
+   ctx.beginPath();
+   ctx.moveTo(0, 0);
+   ctx.lineTo(0, 14 * scale);
+   ctx.stroke();
+   ctx.fillStyle = colors.dark;
+   ctx.beginPath();
+   ctx.arc(2 * scale, 14 * scale, 5 * scale, 0, Math.PI * 2);
+   ctx.fill();
+   ctx.restore();
+   
+   // === body ===
+   ctx.fillStyle = colors.body;
+   ctx.beginPath();
+   ctx.ellipse(0, 10 * scale, 18 * scale, 22 * scale, 0, 0, Math.PI * 2);
+   ctx.fill();
+   ctx.strokeStyle = colors.dark;
+   ctx.lineWidth = 1.5 * scale;
+   ctx.stroke();
+   
+   // scarf
+   ctx.fillStyle = colors.accent;
+   ctx.beginPath();
+   ctx.ellipse(0, 6 * scale, 16 * scale, 5 * scale, 0, 0, Math.PI * 2);
+   ctx.fill();
+   // scarf tail
+   ctx.beginPath();
+   ctx.moveTo(isLeft ? 14 * scale : -14 * scale, 6 * scale);
+   ctx.quadraticCurveTo(
+     isLeft ? 20 * scale : -20 * scale, 14 * scale,
+     isLeft ? 16 * scale : -16 * scale, 20 * scale
+   );
+   ctx.lineWidth = 3 * scale;
+   ctx.strokeStyle = colors.accent;
+   ctx.stroke();
+   
+   // === arms (holding hands between characters) ===
+   const armLen = 22 * scale;
+   const armY = 6 * scale;
+   ctx.strokeStyle = colors.body;
+   ctx.lineWidth = 5 * scale;
+   ctx.lineCap = 'round';
+   // inner arm (toward the other character)
+   ctx.save();
+   const handDir = isLeft ? 1 : -1;
+   const handSwing = Math.sin(phase * 4) * 0.2;
+   ctx.translate(handDir * 12 * scale, armY);
+   ctx.rotate(handDir * (0.4 + handSwing));
+   ctx.beginPath();
+   ctx.moveTo(0, 0);
+   ctx.lineTo(handDir * armLen, armSwing * 5 * scale);
+   ctx.stroke();
+   ctx.restore();
+   // outer arm
+   ctx.save();
+   ctx.translate(-handDir * 12 * scale, armY);
+   ctx.rotate(-handDir * (0.3 + handSwing));
+   ctx.beginPath();
+   ctx.moveTo(0, 0);
+   ctx.lineTo(-handDir * armLen * 0.7, armSwing * 5 * scale - 4 * scale);
+   ctx.stroke();
+   ctx.restore();
+   
+   // === head ===
+   ctx.fillStyle = colors.body;
+   ctx.beginPath();
+   ctx.arc(0, -14 * scale, 16 * scale, 0, Math.PI * 2);
+   ctx.fill();
+   ctx.strokeStyle = colors.dark;
+   ctx.lineWidth = 1.2 * scale;
+   ctx.stroke();
+   
+   // === hair ===
+   ctx.fillStyle = colors.dark;
+   ctx.beginPath();
+   ctx.arc(0, -18 * scale, 14 * scale, -Math.PI, 0);
+   ctx.fill();
+   // hair tufts
+   for (let i = -1; i <= 1; i+=2) {
+     ctx.beginPath();
+     ctx.arc(i * 8 * scale, -22 * scale, 6 * scale, Math.PI*0.8, Math.PI*2.2);
+     ctx.fill();
+   }
+   
+   // === eyes ===
+   ctx.fillStyle = '#fff';
+   ctx.beginPath();
+   ctx.ellipse(-5 * scale, -14 * scale, 4 * scale, 5 * scale, 0, 0, Math.PI * 2);
+   ctx.fill();
+   ctx.beginPath();
+   ctx.ellipse(5 * scale, -14 * scale, 4 * scale, 5 * scale, 0, 0, Math.PI * 2);
+   ctx.fill();
+   // pupils
+   const eyeOffX = 0;
+   const eyeOffY = Math.sin(phase * 4) * 1;
+   ctx.fillStyle = colors.eye;
+   ctx.beginPath();
+   ctx.arc(-5 * scale + eyeOffX, -13 * scale + eyeOffY, 2.5 * scale, 0, Math.PI * 2);
+   ctx.fill();
+   ctx.beginPath();
+   ctx.arc(5 * scale + eyeOffX, -13 * scale + eyeOffY, 2.5 * scale, 0, Math.PI * 2);
+   ctx.fill();
+   // eye shine
+   ctx.fillStyle = 'rgba(255,255,255,0.7)';
+   ctx.beginPath();
+   ctx.arc(-4 * scale, -15 * scale, 1.2 * scale, 0, Math.PI * 2);
+   ctx.fill();
+   ctx.beginPath();
+   ctx.arc(6 * scale, -15 * scale, 1.2 * scale, 0, Math.PI * 2);
+   ctx.fill();
+   
+   // === blush ===
+   ctx.fillStyle = colors.cheek;
+   ctx.beginPath();
+   ctx.ellipse(-9 * scale, -9 * scale, 4 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
+   ctx.fill();
+   ctx.beginPath();
+   ctx.ellipse(9 * scale, -9 * scale, 4 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
+   ctx.fill();
+   
+   // === mouth (smile) ===
+   ctx.strokeStyle = colors.dark;
+   ctx.lineWidth = 1.5 * scale;
+   ctx.beginPath();
+   ctx.arc(0, -8 * scale, 4 * scale, 0.1, Math.PI - 0.1);
+   ctx.stroke();
+   
+   // === name tag ===
+   ctx.fillStyle = 'rgba(255,255,255,0.85)';
+   ctx.font = `${12 * scale}px "Segoe UI", sans-serif`;
+   ctx.textAlign = 'center';
+   ctx.textBaseline = 'top';
+   ctx.fillText(name, 0, -33 * scale);
+   
+   ctx.restore();
+ }
+ 
+ function drawHoldingHands() {
+   // draw a little heart/sparkle between them when they're close
+   const phase = dancePhase.t;
+   const heartY = 230 + Math.sin(phase * 4) * 4;
+   const heartScale = 0.8 + Math.sin(phase * 8) * 0.15;
+   const alpha = 0.4 + Math.sin(phase * 4) * 0.25;
+   ctx.save();
+   ctx.translate(W/2 - 5, heartY);
+   ctx.scale(heartScale, heartScale);
+   ctx.fillStyle = `rgba(255,80,120,${alpha})`;
+   ctx.shadowColor = 'rgba(255,80,120,0.3)';
+   ctx.shadowBlur = 15;
+   ctx.beginPath();
+   ctx.moveTo(0, 4);
+   ctx.bezierCurveTo(-8, -4, -12, -8, 0, -12);
+   ctx.bezierCurveTo(12, -8, 8, -4, 0, 4);
+   ctx.fill();
+   ctx.shadowBlur = 0;
+   ctx.restore();
+ }
+ 
+ // ========== Main Loop ==========
+ let animId;
+ let startTime = Date.now();
+ 
+ function draw() {
+   const now = Date.now();
+   const elapsed = (now - startTime) / 1000;
+   dancePhase.t = elapsed * 0.8;  // dance speed
+   
+   // clear & bg
+   drawSnowBg();
+   
+   // snow ground
+   drawGround();
+   
+   // snowflakes
+   for (const s of snowflakes) {
+     s.y += s.speed;
+     s.x += s.drift + Math.sin(elapsed * 0.5 + s.x * 0.01) * 0.2;
+     if (s.y > H) { s.y = -5; s.x = Math.random() * W; }
+     if (s.x > W) s.x = 0;
+     if (s.x < 0) s.x = W;
+     ctx.fillStyle = `rgba(255,255,255,${s.opacity * (0.7 + Math.sin(elapsed + s.x)*0.3)})`;
+     ctx.beginPath();
+     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+     ctx.fill();
+   }
+   
+   // characters
+   const cx = W / 2;
+   const cy = 290;
+   const sc = 1.8;
+   
+   // 咕嘎 (left)
+   drawCharacter(cx - 35, cy, sc, {
+     body: '#6bcf7a', dark: '#2d7a3a',
+     accent: '#ff6b6b', eye: '#1a1a1a', cheek: 'rgba(255,150,150,0.4)'
+   }, '咕嘎', true);
+   
+   // doro (right)
+   drawCharacter(cx + 35, cy, sc, {
+     body: '#f5b56b', dark: '#b87333',
+     accent: '#4fc3f7', eye: '#1a1a1a', cheek: 'rgba(255,180,150,0.4)'
+   }, 'doro', false);
+   
+   // heart between them
+   drawHoldingHands();
+   
+   animId = requestAnimationFrame(draw);
+ }
+ 
+ // ========== Controls ==========
+ document.getElementById('playBtn').addEventListener('click', () => {
+   initAudio();
+   if (!isPlaying) {
+     masterGain.gain.value = 0.30;
+     playMelody();
+     isPlaying = true;
+     document.getElementById('playBtn').textContent = '♫ 播放中...';
+     setTimeout(() => {
+       isPlaying = false;
+       document.getElementById('playBtn').textContent = '▶ 播放音乐';
+     }, 17000);
+   }
+ });
+ document.getElementById('resetBtn').addEventListener('click', () => {
+   startTime = Date.now();
+ });
+ 
+ draw();
+ </script>
+ </body>
+ </html>

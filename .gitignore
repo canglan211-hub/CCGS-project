@@ -1,0 +1,28 @@
+﻿# Node
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tools (这些是本地的可执行文件，不入库)
+.tools/
+CCGS Skill Testing Framework/
+production/
